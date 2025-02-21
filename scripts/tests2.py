@@ -11,4 +11,3 @@ X_num, X_cat, y, labels = load_heterogeneous_dataset('../data/ref_data.csv', deb
 print(f"nombre de cellules vides dans X_num: {count_void_data(X_num)}")
 X = imputer_variables(X_num, X_cat, debugging=True)
 print(f"nombre de cellules vides dans X: {count_void_data(X)}")
-

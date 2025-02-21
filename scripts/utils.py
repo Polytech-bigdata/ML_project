@@ -71,8 +71,8 @@ def load_heterogeneous_dataset(dataset_filepath, header=0, delimiter=',', predic
     X_num = X.select_dtypes(include=[np.number]) # select numerical columns
     X_cat = X.select_dtypes(include=[object]) # select categorical columns
     #get the indexes of the columns
-    col_num = [X.columns.get_loc(col) for col in X_num.columns]
-    col_cat = [X.columns.get_loc(col) for col in X_cat.columns]
+    col_num = [X_num.columns.get_loc(col) for col in X_num.columns]
+    col_cat = [X_cat.columns.get_loc(col) for col in X_cat.columns]
     
     #analyse data properties
     if debugging:
@@ -84,29 +84,36 @@ def load_heterogeneous_dataset(dataset_filepath, header=0, delimiter=',', predic
         print(f"Number of positive numerical values: {len(y[y==1]/y.shape[0])*100}")
         print(f"Number of negative numerical values: {len(y[y==0]/y.shape[0])*100}")
    
-    return y, X_num, X_cat, labels
+    return X_num, X_cat, y, labels
 
 def imputer_variables(X_num, X_cat, debugging=False):
+    # fill missing values in the categorical variables with most frequent value
+    imp_cat = SimpleImputer(strategy='most_frequent')
+    X_cat_filled = imp_cat.fit_transform(X_cat)
+    X_cat_filled = pd.DataFrame(X_cat_filled, columns=X_cat.columns)
+    
+    #transform the dataset into a numpy array
+    X_cat_filled = X_cat_filled.values
+    X_cat_filled = X_cat_filled.astype(str)
 
-    for col_id in range(X_cat.shape[1]): # shape 1 = number of columns    
-        unique_val, val_idx = np.unique(X_cat[:, col_id], return_inverse=True) 
-        X_cat[:, col_id] = val_idx 
-    imp_cat = SimpleImputer(missing_values=0, strategy='most_frequent')
-    X_cat[:, :] = imp_cat.fit_transform(X_cat[:, :]) 
+    #transform the categorical variables into numerical variables
+    enc = LabelEncoder()
+    for i in range(X_cat_filled.shape[1]):
+        X_cat_filled[:,i] = enc.fit_transform(X_cat_filled[:,i])
+    X_cat_filled = X_cat_filled.astype(float)
 
-    #for numerical variables, we will replace missing values by the mean of the column
+    # fill missing values in the numerical variables with the mean of the column
+    X_num = X_num.values
     X_num = X_num.astype(float) 
     imp_num = SimpleImputer(missing_values=np.nan, strategy='mean') 
     X_num_imput = imp_num.fit_transform(X_num)
 
-    #encode the categorical variables with one hot encoding
-    X_cat_filled = LabelEncoder().fit_transform(X_cat).toarray()
-
-    print(f"X_cat_filled: {X_cat_filled}")
-    print(f"X_num_imput: {X_num_imput}")
-
-    #concatenate the categorical and numerical variables normalized
+    #concatenate the categorical and numerical variables to get the new dataset
     newDataset = np.hstack((X_cat_filled, X_num_imput))
-    print(f"newDataset: {newDataset}")
+    
+    if debugging:
+        print(f"X_cat_filled: {X_cat_filled}")
+        print(f"X_num_imput: {X_num_imput}")
+        print(f"newDataset: {newDataset}")
 
     return newDataset
