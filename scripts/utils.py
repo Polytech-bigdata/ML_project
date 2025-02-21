@@ -136,6 +136,11 @@ def get_data_by_strategy(X, y, strategy: str = "natural", test_size=0.5, n_compo
     return X_train, X_test, y_train, y_test
 
 
+
+
+def coucou():
+    print("coucou")
+
 def scoring(y_test, y_pred, score_type='Acc_Prec'):
     specific_score = precision_score
     if score_type == 'Acc_Rec':
