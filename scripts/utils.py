@@ -86,6 +86,7 @@ def load_heterogeneous_dataset(dataset_filepath, header=0, delimiter=',', predic
    
     return X_num, X_cat, y, labels
 
+
 def imputer_variables(X_num, X_cat, debugging=False):
     # fill missing values in the categorical variables with most frequent value
     imp_cat = SimpleImputer(strategy='most_frequent')
@@ -117,3 +118,124 @@ def imputer_variables(X_num, X_cat, debugging=False):
         print(f"newDataset: {newDataset}")
 
     return newDataset
+
+
+def get_data_by_strategy(X, y, strategy: str = "natural", test_size=0.5, n_components=3, random_state=1):
+    if strategy not in ["natural", "normalized", "pca"]:
+        raise ValueError("Invalid strategy")
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size, random_state)
+    if strategy != "natural":
+        if strategy == "normalized" or strategy == "pca":
+            scaler = StandardScaler()
+            X_train = scaler.fit_transform(X_train)
+            X_test = scaler.transform(X_test)
+        if strategy == "pca":
+            pca = PCA(n_components=n_components)
+            X_train = pca.fit_transform(X_train)
+            X_test = pca.transform(X_test)
+    return X_train, X_test, y_train, y_test
+
+
+def scoring(y_test, y_pred, score_type='Acc_Prec'):
+    specific_score = precision_score
+    if score_type == 'Acc_Rec':
+        specific_score = recall_score
+    elif score_type != 'Acc_Prec':
+        raise ValueError(f"Unknown score type: {score_type}")
+    return (accuracy_score(y_test, y_pred) + specific_score(y_test, y_pred)) / 2
+
+
+def run_classifiers(X, y, clfs, score_methode, debugging=False):
+    mean_scores = {}
+    kf = KFold(n_splits=10, shuffle=True, random_state=0) 
+    for i in clfs:     
+        clf = clfs[i]
+
+        start = time()
+ 
+        # Cross-validation for the criterion choosen: the call to the function scoring which
+        # calculate the mean of the accuracy and the precision or the recall or the string name of the criterion available in the cross_val_score function (such as 'roc_auc')
+        cv_crit = cross_val_score(clf, X, y, cv=kf, scoring=score_methode, n_jobs=-1)
+
+        mean_scores[i] = np.mean(cv_crit)
+        
+        execution_time = time() - start
+
+        if debugging:
+            print(f"Results for {i} :")
+            print(f"Execution time: {execution_time:.3f} s")
+            print(f"Mean of criterion choose for {i} is: {np.mean(cv_crit):.3f} +/- {np.std(cv_crit):.3f}")
+            print("\n")
+
+    nameBestModel = max(mean_scores, key=mean_scores.get)
+    bestModel = clfs[ nameBestModel ]
+    bestModelScore = mean_scores[ nameBestModel ]  
+    if debugging:
+        print(f"Best model: {bestModel} with score: {bestModelScore}")
+
+    return bestModelScore, bestModel
+
+
+def apply_ACP(X_scaled, n_components=3):
+    pca = PCA(n_components=n_components,random_state=1)
+    X_pca = pca.fit_transform(X_scaled)
+    
+    X_train = np.hstack((X_train, X_pca))
+    #X_test = np.hstack((X_test, X_test_pca))
+    
+    return X_pca
+
+
+def normalize_data(X):
+    """
+    Normalize the feature data using StandardScaler.
+    Parameters:
+    X_train (array-like): Training feature data.
+    X_test (array-like): Test feature data.
+    Returns:
+    tuple: A tuple containing the normalized training and test feature data.
+    """
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    return X_scaled
+            
+
+def comparison_cross_validation(X, y, clfs, scoring=scoring, debugging=False):
+    #case 1: without PCA
+    #subcase 1: without normalization
+    mean = make_scorer(scoring, greater_is_better=True)
+    score, clf = run_classifiers(X, y, clfs, score_methode=mean, debugging=debugging)
+    score_without_normalization = score
+    clf_without_normalization = clf
+    strategy = "natural"
+    
+    #subcase 2: with normalization
+    X_scaled = normalize_data(X)
+    score_normalized, clf_normalized = run_classifiers(X_scaled, y, clfs, score_methode=mean, debugging=debugging)
+    
+    # Get best model between model with normalization and model without normalization
+    if score < score_normalized :
+        score = score_normalized
+        clf = clf_normalized
+        strategy = "normalized" 
+    
+    #case 2: with PCA
+    X_pca = apply_ACP(X_scaled, n_components=3)
+    score_pca, clf_pca = run_classifiers(X_pca, y, clfs, score_methode=mean, debugging=debugging)
+    
+    #Finally, select the best model between the best model without PCA and the best model with PCA
+    if score < score_pca :
+        score = score_pca
+        clf = clf_pca
+        strategy = "pca"
+
+    X_train_final, X_test_final, y_train, y_test =  get_data_by_strategy(X, y, strategy) 
+
+    if debugging:
+        print(f"Best model without PCA and without normalization: {clf_without_normalization} with score: {score_without_normalization}")
+        print(f"Best model without PCA and with normalization: {clf_normalized} with score: {score_normalized}")
+        print(f"Finally the best model is: {clf} with score: {score} and strategy: {strategy}")
+
+    return clf, X_train_final, X_test_final, y_train, strategy
+
+
