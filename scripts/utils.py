@@ -21,7 +21,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, BaggingClassifier
 from sklearn.impute import SimpleImputer
-#from xgboost import XGBClassifier
+from xgboost import XGBClassifier
 
 #global variables
 clfs = None
@@ -111,7 +111,7 @@ def get_data_by_strategy(X, y, strategy: str = "natural", test_size=0.5, n_compo
     if strategy not in ["natural", "normalized", "pca"]:
         raise ValueError("Invalid strategy")
     
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size, random_state)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
 
     if strategy != "natural":
 
@@ -130,13 +130,17 @@ def get_data_by_strategy(X, y, strategy: str = "natural", test_size=0.5, n_compo
     return X_train, X_test, y_train, y_test
 
 
-def scoring(y_test, y_pred, score_type='Acc_Prec'):
-    specific_score = precision_score
-    if score_type == 'Acc_Rec':
-        specific_score = recall_score
-    elif score_type != 'Acc_Prec':
-        raise ValueError(f"Unknown score type: {score_type}")
-    return (accuracy_score(y_test, y_pred) + specific_score(y_test, y_pred)) / 2
+def scoring(y_test, y_pred):
+    """
+    Calculate the average recall score for both positive and negative classes.
+    Parameters:
+    y_test (array-like): True labels.
+    y_pred (array-like): Predicted labels.
+    Returns:
+    float: The average recall score for both classes.
+    """
+
+    return (recall_score(y_test, y_pred, pos_label=0) + recall_score(y_test, y_pred, pos_label=1)) / 2
 
 
 def run_classifiers(X, y, clfs, score_methode, n_splits=10, debugging=False):
@@ -145,13 +149,16 @@ def run_classifiers(X, y, clfs, score_methode, n_splits=10, debugging=False):
     for i in clfs:     
         clf = clfs[i]
 
+        if debugging:
+            print(f"Running {i}...")
+
         start = time()
  
         # Cross-validation for the criterion choosen: the call to the function scoring which
         # calculate the mean of the accuracy and the precision or the recall or the string name of the criterion available in the cross_val_score function (such as 'roc_auc')
-        cv_crit = cross_val_score(clf, X, y, cv=kf, scoring=score_methode, n_jobs=-1)
+        cv_crit = cross_val_score(clf, X, y, cv=kf, scoring=score_methode, n_jobs=-1) # cette méthode permet de faire de la cross validation
 
-        mean_scores[i] = np.mean(cv_crit)
+        mean_scores[i] = np.mean(cv_crit) # 
         
         execution_time = time() - start
 
@@ -195,6 +202,7 @@ def comparison_cross_validation(X, y, clfs, scoring=scoring, n_splits=10, debugg
     #case 1: without PCA
     #subcase 1: without normalization
     mean = make_scorer(scoring, greater_is_better=True)
+
     score, clf = run_classifiers(X, y, clfs, score_methode=mean, n_splits=n_splits, debugging=debugging)
     score_without_normalization = score
     clf_without_normalization = clf
@@ -226,6 +234,7 @@ def comparison_cross_validation(X, y, clfs, scoring=scoring, n_splits=10, debugg
         print(f"Finally with {n_splits} splits during cross-validation:")
         print(f"Best model without PCA and without normalization: {clf_without_normalization} with score: {score_without_normalization}")
         print(f"Best model without PCA and with normalization: {clf_normalized} with score: {score_normalized}")
+        print(f"Best model with PCA and with normalization: {clf_pca} with score: {score_pca}")
         print(f"Finally the best model is: {clf} with score: {score} and strategy: {strategy}")
 
     return clf, X_train_final, X_test_final, y_train, y_test, strategy
@@ -236,16 +245,15 @@ def init_clfs(N_ESTIMATORS = 200, RANDOM_STATE = 1, N_NEIGHBORS = 5, N_COMPONENT
     clfs = {
         'RF': RandomForestClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # Random Forest
         'KNN': KNeighborsClassifier(n_neighbors=N_NEIGHBORS),  # K-Nearest Neighbors
-        'MLP': MLPClassifier(random_state=RANDOM_STATE),  # Multi-Layer Perceptron
-        'NB': GaussianNB(),  # Naive Bayes
+        'MLP': MLPClassifier(hidden_layer_sizes=[20,10], random_state=RANDOM_STATE),  # Multi-Layer Perceptron
+        'Naive Bayes': GaussianNB(),  # Naive Bayes
         'CART': DecisionTreeClassifier(random_state=RANDOM_STATE),  # Arbre CART
         'ID3': DecisionTreeClassifier(criterion='entropy', random_state=RANDOM_STATE),  # Arbre ID3
         'DS': DecisionTreeClassifier(max_depth=1, random_state=RANDOM_STATE),  # Decision Stump
-        'Bagging': BaggingClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # Bagging
+        #'Bagging': BaggingClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # Bagging
         'AdaBoost': AdaBoostClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # AdaBoost
-        'SVM': SVC(random_state=RANDOM_STATE),  # Support Vector Machine
-        'Naive Bayes': GaussianNB(),  # Naive Bayes
-        #'XGBoost': XGBClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE)  # XGBoost
+        #'SVM': SVC(random_state=RANDOM_STATE),  # Support Vector Machine
+        'XGBoost': XGBClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE)  # XGBoost
     }
     return clfs
 
@@ -271,20 +279,20 @@ def init_clfs_parameters():
             'criterion': ['gini', 'entropy'],
             'splitter': ['best', 'random']
         },
-        BaggingClassifier: {
-            'n_estimators': [10, 100, 1000],
-            'max_samples': [0.5, 1.0],
-            'max_features': [0.5, 1.0]
-        },
+        # BaggingClassifier: {
+        #     'n_estimators': [10, 100, 1000],
+        #     'max_samples': [0.5, 1.0],
+        #     'max_features': [0.5, 1.0]
+        # },
         AdaBoostClassifier: {
             'n_estimators': [50, 100, 500],
             'learning_rate': [0.01, 0.1, 1]
         },
-        SVC: {
-            'C': [1, 10, 100],
-            'gamma': [0.1, 0.01, 0.001],
-            'kernel': ['linear', 'poly', 'rbf', 'sigmoid']
-        }
+        # SVC: {
+        #     'C': [1, 10, 100],
+        #     'gamma': [0.1, 0.01, 0.001],
+        #     'kernel': ['linear', 'poly', 'rbf', 'sigmoid']
+        # }
     }
     return clfs_parameters
 
@@ -315,7 +323,7 @@ def feature_importance(X_train, y_train, labels, debugging=False):
     return sorted_idx
     
 
-def feature_selection(X_train, X_test, y_train, y_test, clf, sorted_idx, scoring=scoring, score_type='Acc_Prec', debugging=False):
+def feature_selection(X_train, X_test, y_train, y_test, clf, sorted_idx, scoring=scoring, score_type='Rec+_Rec-', debugging=False):
     nb_total_features = X_train.shape[1]+1
     scores = np.zeros(nb_total_features)
     nb_selected_features = 0
@@ -332,7 +340,6 @@ def feature_selection(X_train, X_test, y_train, y_test, clf, sorted_idx, scoring
         if max_score < scores[f]:
             nb_selected_features = f
             max_score = scores[f]
-
 
     if debugging:
         print(f"Number of features selected : {nb_selected_features}") # Reprise etape 5 :ATTENTION  AVEC LA PARTIE 7 le SCORING SE BASE SUR LA METHODE DE CROSS VALIDATION
@@ -358,31 +365,49 @@ def fine_tune_model(X_train, y_train, bestModel, param_grid, scoring=scoring, de
     best_model = grid_search.best_estimator_
     
     if debugging:
-        print(f"Best score after parameters cross-validation: {best_score}")
+        print(f"Best score after parameters: {best_score}")
         print(f"The best fine-tuned model is : \n {best_model}")
         
     return best_model
 
+def create_pickle_file(steps, pipeline_filepath):
+    pipeline = Pipeline(steps)
+    with open(pipeline_filepath, "wb") as file:
+        pickle.dump(pipeline, file)
+        print(f"Pipeline saved as {pipeline_filepath}")
+    return pipeline
 
-def creation_pipeline(X, y, model, strategy, nb_features, pipeline_filepath= '../artifacts/', debugging=False):
+
+def creation_pipelines(X, y, model, strategy, nb_features, artifacts_path= '../artifacts/', debugging=False):
+
+    # Create the pipelines for Scaler, PCA, Feature selection and Classifier
+
+    # Create the pipeline for Scaler
     steps = []
-    # Add normalization step if needed
     if strategy == "normalized" or strategy == "PCA":
         steps.append(("scaler", StandardScaler()))
-    # Add PCA step if needed
+        scaler_pipeline = create_pickle_file(steps, artifacts_path + "scaler.pkl")
+        X, y = scaler_pipeline.fit_transform(X, y)
+        if debugging:
+            print(f"Pipeline created: {scaler_pipeline}")
+        
+    # Create the pipeline for PCA
+    steps = []
     if strategy == "pca":
         steps.append(("pca", PCA(n_components=3)))
-    # Add feature selection step
+        pca_pipeline = create_pickle_file(steps, artifacts_path + "pca.pkl")
+        X, y = pca_pipeline.fit_transform(X, y)
+        if debugging:
+            print(f"Pipeline created: {pca_pipeline}")
+
+    # Create the pipeline for Feature selection and Classifier
+    steps = []
     steps.append(("fs", SelectFromModel(RandomForestClassifier(n_estimators=1000, random_state=1), max_features=nb_features)))
     steps.append(("classifier", model))
 
-    pipeline = Pipeline(steps)
+    pipeline = create_pickle_file(steps, artifacts_path + "model.pkl")
 
     pipeline.fit(X, y)
-
-    with open("pipeline.pkl", "wb") as file:
-        pickle.dump(pipeline, file)
-        print("Pipeline saved as pipeline.pkl")
 
     if debugging:
         print(f"Pipeline created: {pipeline}")
@@ -391,7 +416,6 @@ def creation_pipeline(X, y, model, strategy, nb_features, pipeline_filepath= '..
 def load_pipeline(pipeline_filepath):
     with open(pipeline_filepath, "rb") as file:
         pipeline = pickle.load(file)
-    
     return pipeline
 
 
@@ -421,7 +445,7 @@ def learning(dataset_filepath, clfs, clfs_parameters, comparison_func=comparison
     best_model = fine_tune_model(X_train, y_train, model, param_grid, scoring=criterion, debugging=debugging)
 
     # create the pipeline
-    creation_pipeline(X, y, best_model, strategy, nb_selected_features, debugging=debugging)
+    creation_pipelines(X, y, best_model, strategy, nb_selected_features, debugging=debugging)
 
     #load the pipeline
     pipeline = load_pipeline("pipeline.pkl")
@@ -429,9 +453,27 @@ def learning(dataset_filepath, clfs, clfs_parameters, comparison_func=comparison
     print(f"End of process")
     return pipeline
 
+def update_labels_for_stragegy(labels, strategy, nb_components=3):
+    if strategy == "normalized":
+        for label in labels:
+            label += "_normalized"
+    if strategy == "pca":
+        labels = np.hstack((labels, [f"PCA_{i}" for i in range(nb_components)]))
+    return labels
 
-def create_data_csv(X, y, labels, csv_path):
+
+def create_data_csv(X_list, y_list, labels, csv_filename, csv_filepath="../data/"):
+    if len(X_list) != len(y_list):
+        raise ValueError("X_list and y_list must have the same length")
+    if len(X_list) == 2:
+       # Concatenate the two datasets
+       X = np.hstack((X_list[0], X_list[1])) #X_train, X_test = X_list[0], X_list[1]
+       y = np.hstack((y_list[0], y_list[1])) #y_train, y_test = y_list[0], y_list[1]
+    else:
+        X = X_list[0]
+        y = y_list[0]
+    # Add the target column to the labels
     data = np.hstack((X, y.reshape(-1, 1)))
     df = pd.DataFrame(data)
-    df.to_csv(csv_path, index=False, columns=labels)
-    print(f"Data saved in {csv_path}")
+    df.to_csv(csv_filepath + csv_filename, index=False, columns=labels)
+    print(f"Data saved in {csv_filepath + csv_filename}")
