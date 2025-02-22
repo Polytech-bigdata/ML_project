@@ -21,7 +21,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, BaggingClassifier
 from sklearn.impute import SimpleImputer
-from xgboost import XGBClassifier
+#from xgboost import XGBClassifier
 
 #global variables
 clfs = None
@@ -253,7 +253,7 @@ def init_clfs(N_ESTIMATORS = 200, RANDOM_STATE = 1, N_NEIGHBORS = 5, N_COMPONENT
         #'Bagging': BaggingClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # Bagging
         'AdaBoost': AdaBoostClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # AdaBoost
         #'SVM': SVC(random_state=RANDOM_STATE),  # Support Vector Machine
-        'XGBoost': XGBClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE)  # XGBoost
+        #'XGBoost': XGBClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE)  # XGBoost
     }
     return clfs
 
@@ -292,6 +292,11 @@ def init_clfs_parameters():
         #     'C': [1, 10, 100],
         #     'gamma': [0.1, 0.01, 0.001],
         #     'kernel': ['linear', 'poly', 'rbf', 'sigmoid']
+        # },
+        # XGBClassifier: {
+        #     'n_estimators': [100, 500, 1000],
+        #     'max_depth': [3, 5, 7],
+        #     'learning_rate': [0.01, 0.1, 1]
         # }
     }
     return clfs_parameters
@@ -342,7 +347,7 @@ def feature_selection(X_train, X_test, y_train, y_test, clf, sorted_idx, scoring
             max_score = scores[f]
 
     if debugging:
-        print(f"Number of features selected : {nb_selected_features}") # Reprise etape 5 :ATTENTION  AVEC LA PARTIE 7 le SCORING SE BASE SUR LA METHODE DE CROSS VALIDATION
+        print(f"Number of features selected : {nb_selected_features}")
         plt.plot(scores) 
         plt.xlabel("Nombre de Variables") 
         plt.ylabel("({} / 2)".format(score_type))
@@ -453,27 +458,38 @@ def learning(dataset_filepath, clfs, clfs_parameters, comparison_func=comparison
     print(f"End of process")
     return pipeline
 
+
 def update_labels_for_stragegy(labels, strategy, nb_components=3):
     if strategy == "normalized":
-        for label in labels:
-            label += "_normalized"
+        labels =[label +"_normalized" for label in labels]
     if strategy == "pca":
         labels = np.hstack((labels, [f"PCA_{i}" for i in range(nb_components)]))
+    # Add the target column to the labels
+    labels = np.hstack((labels, ["target"]))
+    print(f"Updated labels : {labels}")
     return labels
 
 
 def create_data_csv(X_list, y_list, labels, csv_filename, csv_filepath="../data/"):
     if len(X_list) != len(y_list):
         raise ValueError("X_list and y_list must have the same length")
+    X=[]
+    y=[]
     if len(X_list) == 2:
-       # Concatenate the two datasets
-       X = np.hstack((X_list[0], X_list[1])) #X_train, X_test = X_list[0], X_list[1]
-       y = np.hstack((y_list[0], y_list[1])) #y_train, y_test = y_list[0], y_list[1]
+        # Concatenate the two datasets and targets
+        for i in range(len(X_list)):
+            for j in range(len(X_list[i])):
+                X.append(X_list[i][j])
+                y.append(y_list[i][j])
     else:
         X = X_list[0]
         y = y_list[0]
-    # Add the target column to the labels
+    #transform into True and False the target column
+    y = np.array(y)
+    y = y.astype(bool)
+    print(f"y as booleans={y}")
+    # Add the target column to the dataframe
     data = np.hstack((X, y.reshape(-1, 1)))
-    df = pd.DataFrame(data)
-    df.to_csv(csv_filepath + csv_filename, index=False, columns=labels)
+    df = pd.DataFrame(data,columns=labels)
+    df.to_csv(csv_filepath + csv_filename,sep= ";", index=False)
     print(f"Data saved in {csv_filepath + csv_filename}")
