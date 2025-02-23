@@ -3,6 +3,7 @@ import pickle
 from copy import deepcopy
 import numpy as np
 from time import time
+from sklearn.compose import ColumnTransformer
 from sklearn.feature_selection import SelectFromModel, SelectKBest
 from sklearn.pipeline import Pipeline 
 np.set_printoptions(threshold=10000,suppress=True) 
@@ -17,7 +18,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, make_scorer, precision_score, recall_score
-from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler, LabelEncoder
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, BaggingClassifier
 from sklearn.impute import SimpleImputer
@@ -57,9 +58,11 @@ def load_heterogeneous_dataset(dataset_filepath, header=0, delimiter=',', predic
 
     X_num = X.select_dtypes(include=[np.number]) # select numerical columns
     X_cat = X.select_dtypes(include=[object]) # select categorical columns
+
     #get the indexes of the columns
-    col_num = [X_num.columns.get_loc(col) for col in X_num.columns]
-    col_cat = [X_cat.columns.get_loc(col) for col in X_cat.columns]
+    print(f"X.columns = {X_num.columns}")
+    col_num = [X.columns.get_loc(col) for col in X_num.columns]
+    col_cat = [X.columns.get_loc(col) for col in X_cat.columns]
     
     #analyse data properties
     if debugging:
@@ -71,17 +74,16 @@ def load_heterogeneous_dataset(dataset_filepath, header=0, delimiter=',', predic
         print(f"Number of positive numerical values: {(len(y[y==1])/y.shape[0])*100}%")
         print(f"Number of negative numerical values: {(len(y[y==0])/y.shape[0])*100}%")
    
-    return X_num, X_cat, y, labels
+    return  X, y, col_num, col_cat, labels
 
 
-def imputer_variables(X_num, X_cat, debugging=False):
+def imputer_variables(X, col_num, col_cat, debugging=False):
+    X_cat = X.values[:, col_cat]
+    X_num = X.values[:, col_num]
+
     # fill missing values in the categorical variables with most frequent value
     imp_cat = SimpleImputer(strategy='most_frequent')
     X_cat_filled = imp_cat.fit_transform(X_cat)
-    X_cat_filled = pd.DataFrame(X_cat_filled, columns=X_cat.columns)
-    
-    #transform the dataset into a numpy array
-    X_cat_filled = X_cat_filled.values
     X_cat_filled = X_cat_filled.astype(str)
 
     #transform the categorical variables into numerical variables
@@ -91,7 +93,6 @@ def imputer_variables(X_num, X_cat, debugging=False):
     X_cat_filled = X_cat_filled.astype(float)
 
     # fill missing values in the numerical variables with the mean of the column
-    X_num = X_num.values
     X_num = X_num.astype(float) 
     imp_num = SimpleImputer(missing_values=np.nan, strategy='mean') 
     X_num_imput = imp_num.fit_transform(X_num)
@@ -243,15 +244,15 @@ def comparison_cross_validation(X, y, clfs, scoring=scoring, n_splits=10, debugg
 def init_clfs(N_ESTIMATORS = 200, RANDOM_STATE = 1, N_NEIGHBORS = 5, N_COMPONENTS = 3):
     #global clfs
     clfs = {
-        'RF': RandomForestClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # Random Forest
-        'KNN': KNeighborsClassifier(n_neighbors=N_NEIGHBORS),  # K-Nearest Neighbors
-        'MLP': MLPClassifier(hidden_layer_sizes=[20,10], random_state=RANDOM_STATE),  # Multi-Layer Perceptron
+        #'RF': RandomForestClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # Random Forest
+        #'KNN': KNeighborsClassifier(n_neighbors=N_NEIGHBORS),  # K-Nearest Neighbors
+        #'MLP': MLPClassifier(hidden_layer_sizes=[20,10], random_state=RANDOM_STATE),  # Multi-Layer Perceptron
         'Naive Bayes': GaussianNB(),  # Naive Bayes
-        'CART': DecisionTreeClassifier(random_state=RANDOM_STATE),  # Arbre CART
-        'ID3': DecisionTreeClassifier(criterion='entropy', random_state=RANDOM_STATE),  # Arbre ID3
-        'DS': DecisionTreeClassifier(max_depth=1, random_state=RANDOM_STATE),  # Decision Stump
+        #'CART': DecisionTreeClassifier(random_state=RANDOM_STATE),  # Arbre CART
+        #'ID3': DecisionTreeClassifier(criterion='entropy', random_state=RANDOM_STATE),  # Arbre ID3
+        #'DS': DecisionTreeClassifier(max_depth=1, random_state=RANDOM_STATE),  # Decision Stump
         #'Bagging': BaggingClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # Bagging
-        'AdaBoost': AdaBoostClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # AdaBoost
+        #'AdaBoost': AdaBoostClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # AdaBoost
         #'SVM': SVC(random_state=RANDOM_STATE),  # Support Vector Machine
         #'XGBoost': XGBClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE)  # XGBoost
     }
@@ -375,33 +376,49 @@ def fine_tune_model(X_train, y_train, bestModel, param_grid, scoring=scoring, de
         
     return best_model
 
-def create_pickle_file(steps, pipeline_filepath):
-    pipeline = Pipeline(steps)
+def create_pickle_file(pipeline, pipeline_filepath):
     with open(pipeline_filepath, "wb") as file:
         pickle.dump(pipeline, file)
         print(f"Pipeline saved as {pipeline_filepath}")
-    return pipeline
 
 
-def creation_pipelines(X, y, model, strategy, nb_features, artifacts_path= '../artifacts/', debugging=False):
+def creation_pipelines(X, y, num_col, cat_col, model, strategy, nb_features, artifacts_path= '../artifacts/', debugging=False):
 
     # Create the pipelines for Scaler, PCA, Feature selection and Classifier
-
+    
+    # Create the pipeline for Imputer
+    numerical_transformer = SimpleImputer(missing_values=np.nan, strategy='mean')
+    
+    categorical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='most_frequent')),
+        ('encoder', OrdinalEncoder())
+    ])
+    
+    preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numerical_transformer, num_col),
+        ('cat', categorical_transformer, cat_col)
+    ])
+    
+    imputer_pipeline = Pipeline(steps=["preprocessor", preprocessor])
+    X = imputer_pipeline.fit_transform(X)
+    create_pickle_file(imputer_pipeline, artifacts_path + "imputer.pkl")
+    if debugging:
+        print(f"Pipeline created: {imputer_pipeline}")
+                    
     # Create the pipeline for Scaler
-    steps = []
     if strategy == "normalized" or strategy == "PCA":
-        steps.append(("scaler", StandardScaler()))
-        scaler_pipeline = create_pickle_file(steps, artifacts_path + "scaler.pkl")
+        scaler_pipeline = Pipeline(steps=["scaler", StandardScaler()])
         X, y = scaler_pipeline.fit_transform(X, y)
+        create_pickle_file(scaler_pipeline, artifacts_path + "scaler.pkl")
         if debugging:
             print(f"Pipeline created: {scaler_pipeline}")
         
     # Create the pipeline for PCA
-    steps = []
     if strategy == "pca":
-        steps.append(("pca", PCA(n_components=3)))
-        pca_pipeline = create_pickle_file(steps, artifacts_path + "pca.pkl")
+        pca_pipeline = Pipeline(steps=["pca", PCA(n_components=3)])
         X, y = pca_pipeline.fit_transform(X, y)
+        create_pickle_file(pca_pipeline, artifacts_path + "pca.pkl")
         if debugging:
             print(f"Pipeline created: {pca_pipeline}")
 
@@ -410,10 +427,9 @@ def creation_pipelines(X, y, model, strategy, nb_features, artifacts_path= '../a
     steps.append(("fs", SelectFromModel(RandomForestClassifier(n_estimators=1000, random_state=1), max_features=nb_features)))
     steps.append(("classifier", model))
 
-    pipeline = create_pickle_file(steps, artifacts_path + "model.pkl")
-
+    pipeline = Pipeline(steps)
     pipeline.fit(X, y)
-
+    create_pickle_file(steps, artifacts_path + "model.pkl")
     if debugging:
         print(f"Pipeline created: {pipeline}")
 
@@ -426,10 +442,10 @@ def load_pipeline(pipeline_filepath):
 
 def learning(dataset_filepath, clfs, clfs_parameters, comparison_func=comparison_cross_validation ,criterion=scoring, debugging=False):
     # load the dataset
-    X_num, X_cat, y, labels = load_heterogeneous_dataset(dataset_filepath)
-
+    X, y, col_num, col_cat, labels = load_heterogeneous_dataset(dataset_filepath)
+ 
     # impute the missing values
-    X = imputer_variables(X_num, X_cat, debugging=debugging)
+    X = imputer_variables(X[col_num], X[col_cat], debugging=debugging)
 
     # get the best model, new X_train and X_test (normalized or not, columns added by PCA) and strategy
     model, X_train, X_test, y_train, y_test, strategy = comparison_func(X, y, clfs, scoring=criterion, debugging=debugging)
@@ -450,7 +466,7 @@ def learning(dataset_filepath, clfs, clfs_parameters, comparison_func=comparison
     best_model = fine_tune_model(X_train, y_train, model, param_grid, scoring=criterion, debugging=debugging)
 
     # create the pipeline
-    creation_pipelines(X, y, best_model, strategy, nb_selected_features, debugging=debugging)
+    creation_pipelines(X, y, col_num, col_cat, best_model, strategy, nb_selected_features, debugging=debugging)
 
     #load the pipeline
     pipeline = load_pipeline("pipeline.pkl")
