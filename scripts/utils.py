@@ -23,9 +23,12 @@ from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, BaggingClassifier
 from sklearn.impute import SimpleImputer
 #from xgboost import XGBClassifier
+import os
 
 #global variables
 clfs = None
+#need it as global for applying the correct preprocess pipeline in the api
+strategy = None
 
 
 def load_heterogeneous_dataset(dataset_filepath, header=0, delimiter=',', predict_var=True, debugging=False):
@@ -60,7 +63,6 @@ def load_heterogeneous_dataset(dataset_filepath, header=0, delimiter=',', predic
     X_cat = X.select_dtypes(include=[object]) # select categorical columns
 
     #get the indexes of the columns
-    print(f"X.columns = {X_num.columns}")
     col_num = [X.columns.get_loc(col) for col in X_num.columns]
     col_cat = [X.columns.get_loc(col) for col in X_cat.columns]
     
@@ -200,6 +202,7 @@ def normalize_data(X):
             
 
 def comparison_cross_validation(X, y, clfs, scoring=scoring, n_splits=10, debugging=False):
+    global strategy
     #case 1: without PCA
     #subcase 1: without normalization
     mean = make_scorer(scoring, greater_is_better=True)
@@ -407,7 +410,7 @@ def creation_pipelines(X, y, num_col, cat_col, model, strategy, nb_features, art
         print(f"Pipeline created: {imputer_pipeline}")
                     
     # Create the pipeline for Scaler
-    if strategy == "normalized" or strategy == "PCA":
+    if strategy == "normalized" or strategy == "pca":
         scaler_pipeline = Pipeline(steps=["scaler", StandardScaler()])
         X, y = scaler_pipeline.fit_transform(X, y)
         create_pickle_file(scaler_pipeline, artifacts_path + "scaler.pkl")
@@ -509,3 +512,18 @@ def create_data_csv(X_list, y_list, labels, csv_filename, csv_filepath="../data/
     df = pd.DataFrame(data,columns=labels)
     df.to_csv(csv_filepath + csv_filename,sep= ";", index=False)
     print(f"Data saved in {csv_filepath + csv_filename}")
+
+
+def get_strategy():
+    return strategy
+
+def pickle_file_exists():
+    #depending if the scaler or pca pickle is detected in the artifacts folder, apply the transformation
+    pipelines = []
+    if "scaler.pkl" in os.listdir("artifacts"):
+        scaler = load_pipeline("artifacts/scaler.pkl")
+        pipelines.append(scaler)
+    elif "pca.pkl" in os.listdir("artifacts"):
+        pca = load_pipeline("artifacts/pca.pkl")
+        pipelines.append(pca)
+    return pipelines    

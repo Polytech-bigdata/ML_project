@@ -1,11 +1,13 @@
 from fastapi import FastAPI
-from scripts.utils import load_pipeline
+from scripts.utils import load_pipeline, get_strategy
 from pydantic import BaseModel
 from typing import Optional
 
-app = FastAPI()
+app = FastAPI(title="ICU Mortality Prediction API", description="API to predict ICU mortality", version="1.0")
 
 model = load_pipeline("artifacts/model.pkl")
+
+imputer = load_pipeline("artifacts/imputer.pkl")
 
 class PatientData(BaseModel):
     hospital_id: int
@@ -92,4 +94,16 @@ class PatientData(BaseModel):
 
 @app.post("/predict")
 async def predict(data: PatientData):
-    return model.predict(data)
+    data_dict = data.dict()
+    data_list = [list(data_dict.values())]
+    data_transform = imputer.transform(data_list)
+    strategy = get_strategy()
+    if strategy == "normalized" or strategy == "pca":
+        scaler = load_pipeline("artifacts/scaler.pkl")
+        data_transform = scaler.transform(data_transform)
+    if strategy == "pca":
+        pca = load_pipeline("artifacts/pca.pkl")
+        data_transform = pca.transform(data_transform)
+    #finally, make the prediction
+    prediction = model.predict(data_transform)
+    return {"predictions": prediction}
