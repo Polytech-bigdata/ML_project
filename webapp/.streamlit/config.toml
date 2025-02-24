@@ -1,0 +1,6 @@
+[server]
+
+maxMessageSize = 1000
+maxUploadSize = 1000
+runOnSave = true
+port = 8081
