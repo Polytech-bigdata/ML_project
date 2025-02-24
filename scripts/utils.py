@@ -403,15 +403,16 @@ def creation_pipelines(X, y, num_col, cat_col, model, strategy, nb_features, art
         ('cat', categorical_transformer, cat_col)
     ])
     
-    imputer_pipeline = Pipeline(steps=["preprocessor", preprocessor])
-    X = imputer_pipeline.fit_transform(X)
+    imputer_pipeline = Pipeline(steps=[("preprocessor", preprocessor)])
+    imputer_pipeline.fit(X)
+    X = imputer_pipeline.transform(X)
     create_pickle_file(imputer_pipeline, artifacts_path + "imputer.pkl")
     if debugging:
         print(f"Pipeline created: {imputer_pipeline}")
                     
     # Create the pipeline for Scaler
     if strategy == "normalized" or strategy == "pca":
-        scaler_pipeline = Pipeline(steps=["scaler", StandardScaler()])
+        scaler_pipeline = Pipeline(steps=[("scaler", StandardScaler())])
         X, y = scaler_pipeline.fit_transform(X, y)
         create_pickle_file(scaler_pipeline, artifacts_path + "scaler.pkl")
         if debugging:
@@ -419,7 +420,7 @@ def creation_pipelines(X, y, num_col, cat_col, model, strategy, nb_features, art
         
     # Create the pipeline for PCA
     if strategy == "pca":
-        pca_pipeline = Pipeline(steps=["pca", PCA(n_components=3)])
+        pca_pipeline = Pipeline(steps=[("pca", PCA(n_components=3))])
         X, y = pca_pipeline.fit_transform(X, y)
         create_pickle_file(pca_pipeline, artifacts_path + "pca.pkl")
         if debugging:
@@ -437,10 +438,13 @@ def creation_pipelines(X, y, num_col, cat_col, model, strategy, nb_features, art
         print(f"Pipeline created: {pipeline}")
 
 
-def load_pipeline(pipeline_filepath):
-    with open(pipeline_filepath, "rb") as file:
-        pipeline = pickle.load(file)
-    return pipeline
+def load_pipeline(pipeline_filepath) -> Pipeline :
+    try:
+        with open(pipeline_filepath, "rb") as file:
+            pipeline = pickle.load(file)
+        return pipeline
+    except:
+        return None
 
 
 def learning(dataset_filepath, clfs, clfs_parameters, comparison_func=comparison_cross_validation ,criterion=scoring, debugging=False):
