@@ -713,9 +713,8 @@ def create_data_csv(X_list, y_list, labels, csv_filename, csv_filepath="../data/
     else:
         X = X_list[0]
         y = y_list[0]
-    #transform into True and False the target column
+    #transform target to array
     y = np.array(y)
-    y = y.astype(bool).astype(str)
     # Add the target column to the dataframe
     data = np.hstack((X, y.reshape(-1, 1)))
     df = pd.DataFrame(data,columns=labels)

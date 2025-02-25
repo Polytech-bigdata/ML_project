@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 import numpy as np
 from scripts.utils import load_pipeline
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import Optional
 
 app = FastAPI(title="ICU Mortality Prediction API", description="API to predict ICU mortality", version="1.0")
@@ -101,22 +101,27 @@ class PatientData(BaseModel):
 
 @app.post("/predict")
 async def predict(data: PatientData):
+    # Replace None values with np.nan
+    data_dict = {k: (v if v is not None else np.nan) for k, v in data.dict().items()}
+
     #convert the data to a numpy array
-    data_array = np.array([list(data.dict().values())])
+    data_array = np.array([list(data_dict.values())])
     print(data_array)
     #first, impute missing values
-    print("Imputing data")
+    print("Imputing data...")
     data_transform = imputer.transform(data_array)
     #then, scale the data and apply PCA if necessary
     if scaler is not None:
-        print("Scaling data")
+        print("Scaling data...")
         data_transform = scaler.transform(data_transform)
         if pca is not None:
-            print("Applying PCA")
+            print("Applying PCA...")
             data_transform = pca.transform(data_transform)
     #finally, make the prediction
     try:
+        print("Making prediction...")
         prediction = model.predict(data_transform)
+        print("Prediction:", prediction)
     except Exception as e:
         return {"error": str(e)}
-    return {"predictions": prediction}
+    return {"predictions": prediction.tolist()}
