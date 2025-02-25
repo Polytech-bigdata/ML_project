@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 import numpy as np
-from scripts.utils import load_pipeline
+from utils import load_pipeline
 from pydantic import BaseModel, validator
 from typing import Optional
 
