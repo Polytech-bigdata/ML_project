@@ -31,7 +31,7 @@ class PatientData(BaseModel):
     pre_icu_los_days: Optional[float] = np.nan
     weight: Optional[float] = np.nan
     apache_2_diagnosis: Optional[int] = np.nan
-    apache_3j_diagnosis: Optional[int] = np.nan
+    apache_3j_diagnosis: Optional[float] = np.nan
     apache_post_operative: Optional[bool] = np.nan
     arf_apache: Optional[bool] = np.nan
     gcs_eyes_apache: Optional[int] = np.nan
