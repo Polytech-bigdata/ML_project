@@ -20,7 +20,7 @@ class PatientData(BaseModel):
     hospital_id: Optional[int] = np.nan
     age: Optional[float] = np.nan
     bmi: Optional[float] = np.nan
-    elective_surgery: Optional[bool] = np.nan
+    elective_surgery: Optional[int] = np.nan
     ethnicity: Optional[str] = np.nan
     gender: Optional[str] = np.nan
     height: Optional[float] = np.nan
@@ -32,18 +32,18 @@ class PatientData(BaseModel):
     weight: Optional[float] = np.nan
     apache_2_diagnosis: Optional[int] = np.nan
     apache_3j_diagnosis: Optional[float] = np.nan
-    apache_post_operative: Optional[bool] = np.nan
-    arf_apache: Optional[bool] = np.nan
+    apache_post_operative: Optional[int] = np.nan
+    arf_apache: Optional[int] = np.nan
     gcs_eyes_apache: Optional[int] = np.nan
     gcs_motor_apache: Optional[int] = np.nan
-    gcs_unable_apache: Optional[bool] = np.nan
+    gcs_unable_apache: Optional[int] = np.nan
     gcs_verbal_apache: Optional[int] = np.nan
     heart_rate_apache: Optional[int] = np.nan
-    intubated_apache: Optional[bool] = np.nan
+    intubated_apache: Optional[int] = np.nan
     map_apache: Optional[float] = np.nan
     resprate_apache: Optional[float] = np.nan
     temp_apache: Optional[float] = np.nan
-    ventilated_apache: Optional[bool] = np.nan
+    ventilated_apache: Optional[int] = np.nan
     d1_diasbp_max: Optional[float] = np.nan
     d1_diasbp_min: Optional[float] = np.nan
     d1_diasbp_noninvasive_max: Optional[float] = np.nan
@@ -88,14 +88,14 @@ class PatientData(BaseModel):
     d1_potassium_min: Optional[float] = np.nan
     apache_4a_hospital_death_prob: Optional[float] = np.nan
     apache_4a_icu_death_prob: Optional[float] = np.nan
-    aids: Optional[bool] = np.nan
-    cirrhosis: Optional[bool] = np.nan
-    diabetes_mellitus: Optional[bool] = np.nan
-    hepatic_failure: Optional[bool] = np.nan
-    immunosuppression: Optional[bool] = np.nan
-    leukemia: Optional[bool] = np.nan
-    lymphoma: Optional[bool] = np.nan
-    solid_tumor_with_metastasis: Optional[bool] = np.nan
+    aids: Optional[int] = np.nan
+    cirrhosis: Optional[int] = np.nan
+    diabetes_mellitus: Optional[int] = np.nan
+    hepatic_failure: Optional[int] = np.nan
+    immunosuppression: Optional[int] = np.nan
+    leukemia: Optional[int] = np.nan
+    lymphoma: Optional[int] = np.nan
+    solid_tumor_with_metastasis: Optional[int] = np.nan
     apache_3j_bodysystem: Optional[str] = np.nan
     apache_2_bodysystem: Optional[str] = np.nan
 
@@ -105,7 +105,7 @@ async def predict(data: PatientData):
     data_dict = {k: (v if v is not None else np.nan) for k, v in data.dict().items()}
 
     #convert the data to a numpy array
-    data_array = np.array([list(data_dict.values())])
+    data_array = np.array([list(data_dict.values())], dtype=object)
     print(data_array)
     #first, impute missing values
     print("Imputing data...")
