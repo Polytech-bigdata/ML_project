@@ -116,6 +116,9 @@ def imputer_variables(X, col_num, col_cat, debugging=False):
     #concatenate the categorical and numerical variables to get the new dataset
     newDataset = np.hstack((X_cat_filled, X_num_imput))
     
+    #resort the columns in the original order
+    newDataset = newDataset[:, np.argsort(col_cat + col_num)]
+    
     if debugging:
         print(f"X_cat_filled: {X_cat_filled}")
         print(f"X_num_imput: {X_num_imput}")
@@ -436,7 +439,7 @@ def feature_importance(X_train, y_train, labels, debugging=False):
     
     if debugging:
         print(f"Importances values of variables: \n {importances}")
-        print(f"Labels sorted according to their importances : \n {features[sorted_idx].values}")
+        print(f"Labels sorted according to their importances : \n {features[sorted_idx]}")
         plt.barh(padding, importances[sorted_idx], xerr=std[sorted_idx], align='center')  
         plt.yticks(padding, features[sorted_idx])  
         plt.xlabel("Relative Importance") 
@@ -598,7 +601,7 @@ def creation_pipelines(X, y, num_col, cat_col, model, strategy, nb_features, art
 
     # Create the pipeline for Feature selection and Classifier
     steps = []
-    steps.append(("fs", SelectFromModel(RandomForestClassifier(n_estimators=1000, random_state=1, coef_= model.feature_importances_), max_features=nb_features)))
+    steps.append(("fs", SelectFromModel(RandomForestClassifier(n_estimators=1000, random_state=1), max_features=nb_features)))
     steps.append(("classifier", model))
 
     model_pipeline = Pipeline(steps)
@@ -712,7 +715,7 @@ def create_data_csv(X_list, y_list, labels, csv_filename, csv_filepath="../data/
         y = y_list[0]
     #transform into True and False the target column
     y = np.array(y)
-    y = y.astype(bool)
+    y = y.astype(bool).astype(str)
     # Add the target column to the dataframe
     data = np.hstack((X, y.reshape(-1, 1)))
     df = pd.DataFrame(data,columns=labels)
