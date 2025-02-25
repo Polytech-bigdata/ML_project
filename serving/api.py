@@ -100,28 +100,31 @@ class PatientData(BaseModel):
     apache_2_bodysystem: Optional[str] = np.nan
 
 @app.post("/predict")
-async def predict(data: PatientData):
-    # Replace None values with np.nan
-    data_dict = {k: (v if v is not None else np.nan) for k, v in data.dict().items()}
+async def predict(data: list[PatientData]):
+    predictions = []
+    for patient in data:
+        # Replace None values with np.nan
+        data_dict = {k: (v if v is not None else np.nan) for k, v in patient.dict().items()}
 
-    #convert the data to a numpy array
-    data_array = np.array([list(data_dict.values())], dtype=object)
-    print(data_array)
-    #first, impute missing values
-    print("Imputing data...")
-    data_transform = imputer.transform(data_array)
-    #then, scale the data and apply PCA if necessary
-    if scaler is not None:
-        print("Scaling data...")
-        data_transform = scaler.transform(data_transform)
-        if pca is not None:
-            print("Applying PCA...")
-            data_transform = pca.transform(data_transform)
-    #finally, make the prediction
-    try:
-        print("Making prediction...")
-        prediction = model.predict(data_transform)
-        print("Prediction:", prediction)
-    except Exception as e:
-        return {"error": str(e)}
-    return {"predictions": prediction.tolist()}
+        # Convert the data to a numpy array
+        data_array = np.array([list(data_dict.values())], dtype=object)
+        print(data_array)
+        # First, impute missing values
+        print("Imputing data...")
+        data_transform = imputer.transform(data_array)
+        # Then, scale the data and apply PCA if necessary
+        if scaler is not None:
+            print("Scaling data...")
+            data_transform = scaler.transform(data_transform)
+            if pca is not None:
+                print("Applying PCA...")
+                data_transform = pca.transform(data_transform)
+        # Finally, make the prediction
+        try:
+            print("Making prediction...")
+            prediction = model.predict(data_transform)
+            print("Prediction:", prediction)
+            predictions.append(prediction.item())
+        except Exception as e:
+            return {"error": str(e)}
+    return {"predictions": predictions}

@@ -1,20 +1,19 @@
-version: '3.8' 
+version: "3.8"
 
-networks: 
-  prod_net:  
-      driver: bridge
+networks:
+  prod_net:
+    driver: bridge
 
 services:
-  serving-api:  
-    container_name:  
-        serving-api 
+  serving-api:
+    container_name: serving-api
     build: # ici on indique le chemin du Dockerfile
       context: .
       dockerfile: Dockerfile
-    volumes: 
-      - ../data:/data 
-      - ../artifacts:/artifacts 
-    ports: 
+    volumes:
+      - ../data:/app/data
+      - ../artifacts:/app/artifacts
+    ports:
       - "8080:8080"
-    networks: 
-      - prod_net 
+    networks:
+      - prod_net
