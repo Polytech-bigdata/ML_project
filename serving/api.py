@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 import numpy as np
-from scripts.utils import load_pipeline, get_strategy
+from scripts.utils import load_pipeline
 from pydantic import BaseModel
 from typing import Optional
 
@@ -8,8 +8,13 @@ app = FastAPI(title="ICU Mortality Prediction API", description="API to predict 
 
 model = load_pipeline("artifacts/model.pkl")
 imputer = load_pipeline("artifacts/imputer.pkl")
-scaler = load_pipeline("artifacts/scaler.pkl")
-pca = load_pipeline("artifacts/pca.pkl")
+scaler = None
+pca = None
+try:
+    scaler = load_pipeline("artifacts/scaler.pkl")
+    pca = load_pipeline("artifacts/pca.pkl")
+except:
+    pass
 
 class PatientData(BaseModel):
     hospital_id: Optional[int] = np.nan

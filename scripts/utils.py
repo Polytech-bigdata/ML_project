@@ -3,6 +3,7 @@ import pickle
 from copy import deepcopy
 import numpy as np
 from time import time
+from sklearn import set_config
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_selection import SelectFromModel, SelectKBest
 from sklearn.pipeline import Pipeline 
@@ -18,7 +19,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, make_scorer, precision_score, recall_score
-from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler, LabelEncoder
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler, LabelEncoder
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, BaggingClassifier
 from sklearn.impute import SimpleImputer
@@ -27,40 +28,41 @@ import os
 
 #global variables
 clfs = None
-#need it as global for applying the correct preprocess pipeline in the api
-strategy = None
-
 
 def load_heterogeneous_dataset(dataset_filepath, header=0, delimiter=',', predict_var=True, debugging=False):
     """
-    Charge un dataset hétérogène à partir d'un fichier CSV.
-
-    Args:
-        dataset_filepath (str): Chemin vers le fichier CSV contenant le dataset.
-        header (int, optional): Ligne à utiliser comme en-tête. Par défaut 0.
-        delimiter (str, optional): Délimiteur utilisé dans le fichier CSV. Par défaut ','.
-        predict_var (bool, optional): Indique si la dernière colonne est la variable à prédire. Par défaut True. Pour savoir si on est en apprentissage supervisé ou non.
-        debugging (bool, optional): Indique si des informations de débogage doivent être affichées. Par défaut False.
-
+    Load a heterogeneous dataset from a CSV file, separating numerical and categorical features.
+    
+    Parameters:
+    dataset_filepath (str): The path to the CSV file containing the dataset.
+    header (int or None): Row number to use as the column names. Default is 0.
+    delimiter (str): The delimiter to use for separating values in the CSV file. Default is ','.
+    predict_var (bool): Whether the dataset includes a target variable to predict. Default is True.
+    debugging (bool): If True, prints debugging information about the dataset. Default is False.
+    
     Returns:
-        tuple: Contient les éléments suivants:
-            - X (DataFrame): Les caractéristiques du dataset.
-            - y (Series ou None): La variable à prédire si predict_var est True, sinon None.
-            - X_num (DataFrame): Les colonnes numériques de X.
-            - X_cat (DataFrame): Les colonnes catégorielles de X.
-            - labels (Index): Les étiquettes des colonnes de X.
+    tuple: A tuple containing:
+        - X (DataFrame): The feature matrix.
+        - y (Series or None): The target variable if predict_var is True, otherwise None.
+        - col_num (list): List of indices of numerical columns in X.
+        - col_cat (list): List of indices of categorical columns in X.
+        - labels (Index): Column labels for the features.
     """
     dataset = pd.read_csv(dataset_filepath, header=header, sep=delimiter)
     if predict_var:
-        X = dataset.iloc[:, 2:-2] #not include target column(last one)
+        # select variables excluding the 2 first columns (encounter_id and patient_id) 
+        # and the target column with the previous (because always empty in the original dataset)
+        X = dataset.iloc[:, 2:-2]
         y = dataset.iloc[:,-1]
     else:
         X = dataset.iloc[:, 2:]
         y = None
-    labels = dataset.columns[2:-2] # on fait -2 car la dernière colonne est la variable à prédire et la colonne avant est vide
-
-    X_num = X.select_dtypes(include=[np.number]) # select numerical columns
-    X_cat = X.select_dtypes(include=[object]) # select categorical columns
+    labels = dataset.columns[2:-2]
+    
+    # select numerical columns
+    X_num = X.select_dtypes(include=[np.number]) 
+    # select categorical columns
+    X_cat = X.select_dtypes(include=[object]) 
 
     #get the indexes of the columns
     col_num = [X.columns.get_loc(col) for col in X_num.columns]
@@ -80,6 +82,18 @@ def load_heterogeneous_dataset(dataset_filepath, header=0, delimiter=',', predic
 
 
 def imputer_variables(X, col_num, col_cat, debugging=False):
+    """
+    Impute missing values in numerical and categorical variables and transform categorical variables to numerical.
+    
+    Parameters:
+    X (pd.DataFrame): The input dataframe containing both numerical and categorical variables.
+    col_num (list): List of column indices for numerical variables.
+    col_cat (list): List of column indices for categorical variables.
+    debugging (bool): If True, prints intermediate steps for debugging purposes. Default is False.
+    
+    Returns:
+    np.ndarray: A new dataset with imputed and transformed variables.
+    """
     X_cat = X.values[:, col_cat]
     X_num = X.values[:, col_num]
 
@@ -111,6 +125,27 @@ def imputer_variables(X, col_num, col_cat, debugging=False):
 
 
 def get_data_by_strategy(X, y, strategy: str = "natural", test_size=0.5, n_components=3, random_state=1):
+    """
+    Splits the dataset into training and testing sets and applies the specified preprocessing strategy.
+    
+    Parameters:
+    X (pd.DataFrame or np.ndarray): Features dataset.
+    y (pd.Series or np.ndarray): Target labels.
+    strategy (str, optional): Preprocessing strategy to apply. Options are "natural", "normalized", and "pca". Default is "natural".
+    test_size (float, optional): Proportion of the dataset to include in the test split. Default is 0.5.
+    n_components (int, optional): Number of principal components to keep if strategy is "pca". Default is 3.
+    random_state (int, optional): Controls the shuffling applied to the data before applying the split. Default is 1.
+    
+    Returns:
+    tuple: A tuple containing four elements:
+        - X_train (np.ndarray): Training features.
+        - X_test (np.ndarray): Testing features.
+        - y_train (np.ndarray): Training labels.
+        - y_test (np.ndarray): Testing labels.
+    
+    Raises:
+    ValueError: If the provided strategy is not one of "natural", "normalized", or "pca".
+    """
     if strategy not in ["natural", "normalized", "pca"]:
         raise ValueError("Invalid strategy")
     
@@ -129,6 +164,10 @@ def get_data_by_strategy(X, y, strategy: str = "natural", test_size=0.5, n_compo
             X_test_pca = pca.transform(X_test)
             X_train = np.hstack((X_train, X_train_pca))
             X_test = np.hstack((X_test, X_test_pca))
+    
+    #convert into numpy array y_train and y_test
+    y_train = y_train.values
+    y_test = y_test.values
 
     return X_train, X_test, y_train, y_test
 
@@ -136,17 +175,41 @@ def get_data_by_strategy(X, y, strategy: str = "natural", test_size=0.5, n_compo
 def scoring(y_test, y_pred):
     """
     Calculate the average recall score for both positive and negative classes.
+    
     Parameters:
     y_test (array-like): True labels.
     y_pred (array-like): Predicted labels.
+    
     Returns:
     float: The average recall score for both classes.
     """
-
     return (recall_score(y_test, y_pred, pos_label=0) + recall_score(y_test, y_pred, pos_label=1)) / 2
 
 
 def run_classifiers(X, y, clfs, score_methode, n_splits=10, debugging=False):
+    """
+    Run multiple classifiers with cross-validation and return the best model and its score.
+    
+    Parameters:
+    X : array-like or sparse matrix of shape (n_samples, n_features)
+        The input data to fit.
+    y : array-like of shape (n_samples,)
+        The target variable to try to predict.
+    clfs : dict
+        A dictionary where keys are classifier names and values are classifier instances.
+    score_methode : str
+        The scoring method to use for cross-validation (e.g., 'accuracy', 'precision', 'recall', 'roc_auc').
+    n_splits : int, optional (default=10)
+        Number of folds for cross-validation.
+    debugging : bool, optional (default=False)
+        If True, print debugging information.
+    
+    Returns:
+    bestModelScore : float
+        The best score obtained from cross-validation.
+    bestModel : estimator object
+        The classifier instance that achieved the best score.
+    """
     mean_scores = {}
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=0) 
     for i in clfs:     
@@ -157,9 +220,10 @@ def run_classifiers(X, y, clfs, score_methode, n_splits=10, debugging=False):
 
         start = time()
  
-        # Cross-validation for the criterion choosen: the call to the function scoring which
-        # calculate the mean of the accuracy and the precision or the recall or the string name of the criterion available in the cross_val_score function (such as 'roc_auc')
-        cv_crit = cross_val_score(clf, X, y, cv=kf, scoring=score_methode, n_jobs=-1) # cette méthode permet de faire de la cross validation
+        # Cross-validation for the criterion choosen: the call to the scoring function  which
+        # calculate the mean of the accuracy and the precision or the recall or the string name 
+        # of the criterion available in the cross_val_score function (such as 'roc_auc')
+        cv_crit = cross_val_score(clf, X, y, cv=kf, scoring=score_methode, n_jobs=-1)
 
         mean_scores[i] = np.mean(cv_crit) # 
         
@@ -181,6 +245,16 @@ def run_classifiers(X, y, clfs, score_methode, n_splits=10, debugging=False):
 
 
 def apply_ACP(X_scaled, n_components=3):
+    """
+    Apply Principal Component Analysis (PCA) to the scaled data.
+    
+    Parameters:
+    X_scaled (numpy.ndarray): The scaled input data.
+    n_components (int): The number of principal components to compute. Default is 3.
+    
+    Returns:
+    numpy.ndarray: The transformed data with the principal components.
+    """
     pca = PCA(n_components=n_components,random_state=1)
     X_pca = pca.fit_transform(X_scaled)
     X_scaled = np.hstack((X_scaled, X_pca))
@@ -189,12 +263,13 @@ def apply_ACP(X_scaled, n_components=3):
 
 def normalize_data(X):
     """
-    Normalize the feature data using StandardScaler.
+    Normalize the input data using StandardScaler.
+    
     Parameters:
-    X_train (array-like): Training feature data.
-    X_test (array-like): Test feature data.
+    X (array-like): The input data to be normalized.
+    
     Returns:
-    tuple: A tuple containing the normalized training and test feature data.
+    array-like: The normalized data.
     """
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -202,7 +277,31 @@ def normalize_data(X):
             
 
 def comparison_cross_validation(X, y, clfs, scoring=scoring, n_splits=10, debugging=False):
-    global strategy
+    """
+    Perform cross-validation to compare classifiers with different preprocessing strategies.
+    This function evaluates classifiers using cross-validation with three different preprocessing strategies:
+    1. Without PCA and without normalization.
+    2. Without PCA and with normalization.
+    3. With PCA and with normalization.
+    The function selects the best model based on the scoring metric provided and returns the best classifier along with the training and testing datasets.
+    
+    Parameters:
+    X (array-like): Feature matrix.
+    y (array-like): Target vector.
+    clfs (list): List of classifiers to evaluate.
+    scoring (callable): Scoring function to evaluate the classifiers.
+    n_splits (int, optional): Number of splits for cross-validation. Default is 10.
+    debugging (bool, optional): If True, prints debugging information. Default is False.
+    
+    Returns:
+    tuple: A tuple containing:
+        - clf (estimator): The best classifier.
+        - X_train_final (array-like): Training feature matrix based on the best strategy.
+        - X_test_final (array-like): Testing feature matrix based on the best strategy.
+        - y_train (array-like): Training target vector.
+        - y_test (array-like): Testing target vector.
+        - strategy (str): The best preprocessing strategy used ("natural", "normalized", or "pca").
+    """
     #case 1: without PCA
     #subcase 1: without normalization
     mean = make_scorer(scoring, greater_is_better=True)
@@ -307,6 +406,18 @@ def init_clfs_parameters():
 
 
 def feature_importance(X_train, y_train, labels, debugging=False):
+    """
+    Compute and plot the feature importance using a RandomForestClassifier.
+    
+    Parameters:
+    X_train (pd.DataFrame or np.ndarray): Training data features.
+    y_train (pd.Series or np.ndarray): Training data labels.
+    labels (pd.Index or list): List of feature names.
+    debugging (bool): If True, prints debugging information and plots feature importances. Default is False.
+    
+    Returns:
+    list: Indices of features sorted by importance in descending order.
+    """
     clf = RandomForestClassifier(n_estimators=1000, random_state=1) 
     clf.fit(X_train, y_train) 
     importances=clf.feature_importances_ 
@@ -317,8 +428,11 @@ def feature_importance(X_train, y_train, labels, debugging=False):
     sorted_idx = [i for i in sorted_idxs if i < len(labels)]
     features = labels
 
+    #for plotting the importances values add space between the bars
     padding = np.arange(X_train.size/len(X_train)) + 0.5  
-    padding = padding[:len(labels)]#take only number of features in padding present in labels (not those added by PCA)
+
+    #take only number of features in padding present in labels (not those added by PCA)
+    padding = padding[:len(labels)]
     
     if debugging:
         print(f"Importances values of variables: \n {importances}")
@@ -333,6 +447,23 @@ def feature_importance(X_train, y_train, labels, debugging=False):
     
 
 def feature_selection(X_train, X_test, y_train, y_test, clf, sorted_idx, scoring=scoring, score_type='Rec+_Rec-', debugging=False):
+    """
+    Perform feature selection by iteratively adding features and evaluating the model performance.
+    
+    Parameters:
+    X_train (numpy.ndarray): Training data features.
+    X_test (numpy.ndarray): Test data features.
+    y_train (numpy.ndarray): Training data labels.
+    y_test (numpy.ndarray): Test data labels.
+    clf (object): Classifier object with fit and predict methods.
+    sorted_idx (numpy.ndarray): Indices of features sorted by importance.
+    scoring (callable): Scoring function to evaluate model performance.
+    score_type (str, optional): Type of score to display in the plot title. Default is 'Rec+_Rec-'.
+    debugging (bool, optional): If True, prints debugging information and plots the score evolution. Default is False.
+    
+    Returns:
+    int: Number of selected features that resulted in the highest score.
+    """
     nb_total_features = X_train.shape[1]+1
     scores = np.zeros(nb_total_features)
     nb_selected_features = 0
@@ -361,9 +492,22 @@ def feature_selection(X_train, X_test, y_train, y_test, clf, sorted_idx, scoring
     return nb_selected_features
 
 
-#function using the GridSearchCV function in the bestModel found previously
 def fine_tune_model(X_train, y_train, bestModel, param_grid, scoring=scoring, debugging=False):
-    #makeScorer use for gridSearchCV
+    """
+    Fine-tunes a given model using GridSearchCV with the provided parameter grid and scoring function.
+    
+    Parameters:
+    X_train (array-like or sparse matrix): The training input samples.
+    y_train (array-like): The target values (class labels) as integers or strings.
+    bestModel (estimator object): The base model to be fine-tuned.
+    param_grid (dict or list of dictionaries): Dictionary with parameters names (str) as keys and lists of parameter settings to try as values, or a list of such dictionaries.
+    scoring (callable): A scoring function to evaluate the predictions on the test set. It should be a callable that returns a single value.
+    debugging (bool, optional): If True, prints the best score and the best model after fine-tuning. Default is False.
+    
+    Returns:
+    estimator object: The best fine-tuned model found by GridSearchCV.
+    """
+    #transform the scoring function with makescorer in order to use it for GridSearchCV
     scoring = make_scorer(scoring, greater_is_better=True)
 
     grid_search = GridSearchCV(bestModel, param_grid, n_jobs=-1, cv=5, scoring=scoring)
@@ -379,16 +523,42 @@ def fine_tune_model(X_train, y_train, bestModel, param_grid, scoring=scoring, de
         
     return best_model
 
+
 def create_pickle_file(pipeline, pipeline_filepath):
+    """
+    Serializes a machine learning pipeline object and saves it to a specified file path using pickle.
+    Args:
+        pipeline (object): The machine learning pipeline object to be serialized.
+        pipeline_filepath (str): The file path where the serialized pipeline will be saved.
+    Returns:
+        None
+    """
     with open(pipeline_filepath, "wb") as file:
         pickle.dump(pipeline, file)
         print(f"Pipeline saved as {pipeline_filepath}")
 
 
 def creation_pipelines(X, y, num_col, cat_col, model, strategy, nb_features, artifacts_path= '../artifacts/', debugging=False):
-
-    # Create the pipelines for Scaler, PCA, Feature selection and Classifier
+    """
+    Create the pipelines for Scaler, PCA, Feature selection and Classifier based on the provided strategy.
     
+    Parameters:
+    X (pd.DataFrame): The input features.
+    y (pd.Series): The target variable.
+    num_col (list): List of numerical columns.
+    cat_col (list): List of categorical columns.
+    model (sklearn.base.BaseEstimator): The machine learning model to be used.
+    strategy (str): The strategy for preprocessing ('normalized', 'pca', etc.).
+    nb_features (int): Number of features to select.
+    artifacts_path (str, optional): Path to save the pipeline artifacts. Defaults to '../artifacts/'.
+    debugging (bool, optional): If True, prints debugging information. Defaults to False.
+    
+    Returns:
+    None
+    """
+    #for all pipelines display the diagram of the pipeline
+    set_config(display="diagram")
+
     # Create the pipeline for Imputer
     numerical_transformer = SimpleImputer(missing_values=np.nan, strategy='mean')
     
@@ -428,17 +598,26 @@ def creation_pipelines(X, y, num_col, cat_col, model, strategy, nb_features, art
 
     # Create the pipeline for Feature selection and Classifier
     steps = []
-    steps.append(("fs", SelectFromModel(RandomForestClassifier(n_estimators=1000, random_state=1), max_features=nb_features)))
+    steps.append(("fs", SelectFromModel(RandomForestClassifier(n_estimators=1000, random_state=1, coef_= model.feature_importances_), max_features=nb_features)))
     steps.append(("classifier", model))
 
-    pipeline = Pipeline(steps)
-    pipeline.fit(X, y)
-    create_pickle_file(steps, artifacts_path + "model.pkl")
+    model_pipeline = Pipeline(steps)
+    model_pipeline.fit(X, y)
+    create_pickle_file(model_pipeline, artifacts_path + "model.pkl")
+    
     if debugging:
-        print(f"Pipeline created: {pipeline}")
+        print(f"Pipeline created: {model_pipeline}")
 
 
 def load_pipeline(pipeline_filepath) -> Pipeline :
+    """
+    Load a machine learning pipeline from a file.
+    Args:
+        pipeline_filepath (str): The file path to the pipeline file.
+    Returns:
+        Pipeline: The loaded machine learning pipeline object if successful, 
+                    otherwise None if an error occurs during loading.
+    """
     try:
         with open(pipeline_filepath, "rb") as file:
             pipeline = pickle.load(file)
@@ -452,10 +631,10 @@ def learning(dataset_filepath, clfs, clfs_parameters, comparison_func=comparison
     X, y, col_num, col_cat, labels = load_heterogeneous_dataset(dataset_filepath)
  
     # impute the missing values
-    X = imputer_variables(X[col_num], X[col_cat], debugging=debugging)
+    X_concat = imputer_variables(X, col_num, col_cat, debugging=debugging)
 
     # get the best model, new X_train and X_test (normalized or not, columns added by PCA) and strategy
-    model, X_train, X_test, y_train, y_test, strategy = comparison_func(X, y, clfs, scoring=criterion, debugging=debugging)
+    model, X_train, X_test, y_train, y_test, strategy = comparison_func(X_concat, y, clfs, scoring=criterion, debugging=debugging)
 
     # get the most important features
     sorted_idx = feature_importance(X_train, y_train, labels, debugging=debugging)
@@ -467,22 +646,33 @@ def learning(dataset_filepath, clfs, clfs_parameters, comparison_func=comparison
     param_grid = clfs_parameters[type(model)] 
 
     #update X_train and X_test with the selected features
-    X_train = X_train[:,sorted_idx[:nb_selected_features]]
+    X_train_selected = X_train[:,sorted_idx[:nb_selected_features]]
 
     # fine-tune the model
-    best_model = fine_tune_model(X_train, y_train, model, param_grid, scoring=criterion, debugging=debugging)
+    best_model = fine_tune_model(X_train_selected, y_train, model, param_grid, scoring=criterion, debugging=debugging)
 
     # create the pipeline
-    creation_pipelines(X, y, col_num, col_cat, best_model, strategy, nb_selected_features, debugging=debugging)
+    creation_pipelines(X_concat, y, col_num, col_cat, best_model, strategy, nb_selected_features, debugging=debugging)
 
-    #load the pipeline
-    pipeline = load_pipeline("pipeline.pkl")
+    #update labels for the strategy
+    labels = update_labels_for_stragegy(labels, strategy)
+
+    # save the data imputed and scaled/with PCA in a csv file
+    create_data_csv([X_train, X_test], [y_train, y_test], labels, 'ref_data.csv')
 
     print(f"End of process")
-    return pipeline
 
 
 def update_labels_for_stragegy(labels, strategy, nb_components=3):
+    """
+    Update the list of labels based on the given strategy.
+    Parameters:
+    labels (list): List of initial labels.
+    strategy (str): Strategy to update the labels. Can be "normalized" or "pca".
+    nb_components (int, optional): Number of PCA components to add if strategy is "pca". Default is 3.
+    Returns:
+    list: Updated list of labels with the applied strategy and the target column added.
+    """
     if strategy == "normalized":
         labels =[label +"_normalized" for label in labels]
     if strategy == "pca":
@@ -494,6 +684,19 @@ def update_labels_for_stragegy(labels, strategy, nb_components=3):
 
 
 def create_data_csv(X_list, y_list, labels, csv_filename, csv_filepath="../data/"):
+    """
+    Creates a CSV file from the provided datasets and labels.
+    Parameters:
+    X_list (list of arrays): List containing feature datasets.
+    y_list (list of arrays): List containing target datasets.
+    labels (list of str): List of column names for the CSV file.
+    csv_filename (str): Name of the CSV file to be created.
+    csv_filepath (str, optional): Path where the CSV file will be saved. Defaults to "../data/".
+    Raises:
+    ValueError: If the lengths of X_list and y_list do not match.
+    Returns:
+    None
+    """
     if len(X_list) != len(y_list):
         raise ValueError("X_list and y_list must have the same length")
     X=[]
@@ -502,24 +705,20 @@ def create_data_csv(X_list, y_list, labels, csv_filename, csv_filepath="../data/
         # Concatenate the two datasets and targets
         for i in range(len(X_list)):
             for j in range(len(X_list[i])):
-                X.append(X_list[i][j])
-                y.append(y_list[i][j])
+                X.append(X_list[i][j])  
+                y.append(y_list[i][j])               
     else:
         X = X_list[0]
         y = y_list[0]
     #transform into True and False the target column
     y = np.array(y)
     y = y.astype(bool)
-    print(f"y as booleans={y}")
     # Add the target column to the dataframe
     data = np.hstack((X, y.reshape(-1, 1)))
     df = pd.DataFrame(data,columns=labels)
     df.to_csv(csv_filepath + csv_filename,sep= ";", index=False)
     print(f"Data saved in {csv_filepath + csv_filename}")
 
-
-def get_strategy():
-    return strategy
 
 def pickle_file_exists():
     #depending if the scaler or pca pickle is detected in the artifacts folder, apply the transformation
