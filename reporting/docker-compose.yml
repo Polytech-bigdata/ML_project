@@ -1,0 +1,21 @@
+version: "3.8"
+
+# networks:
+#   prod_net:
+#     driver: bridge
+
+services:
+  reporting:
+    container_name: reporting
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../data:/app/data
+      - ../scripts:/app/scripts
+    ports:
+      - "8082:8082"
+    # networks:
+    #   - prod_net
+
+#docker compose -f --build --force-recreate reporting/docker-compose.yml up

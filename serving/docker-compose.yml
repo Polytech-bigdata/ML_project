@@ -13,6 +13,7 @@ services:
     volumes:
       - ../data:/app/data
       - ../artifacts:/app/artifacts
+      - ../scripts:/app/scripts
     ports:
       - "8080:8080"
     networks:

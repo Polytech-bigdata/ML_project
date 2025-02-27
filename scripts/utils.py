@@ -429,8 +429,11 @@ def feature_importance(X_train, y_train, labels, debugging=False):
     
     sorted_idxs = np.argsort(importances)[::-1] 
     sorted_idx = [i for i in sorted_idxs if i < len(labels)]
+    #save into a csv file features sorted by importance
     features = labels
-
+    pd.DataFrame(np.array(features[sorted_idx]).reshape(-1,1)).to_csv("features_sorted_by_importance.csv", sep=";", index=False)
+    print(f"Features sorted by importance saved in features_sorted_by_importance.csv")
+    
     #for plotting the importances values add space between the bars
     padding = np.arange(X_train.size/len(X_train)) + 0.5  
 

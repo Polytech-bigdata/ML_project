@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 import numpy as np
-from utils import load_pipeline
+from scripts.utils import load_pipeline
 from pydantic import BaseModel, validator
 from typing import Optional
 
@@ -128,3 +128,11 @@ async def predict(data: list[PatientData]):
         except Exception as e:
             return {"error": str(e)}
     return {"predictions": predictions}
+
+class Feedback(BaseModel):
+    feedback: Optional[int] = np.nan
+
+@app.post("/predict/feedback")
+async def feedback():
+    #recuperate the predictions obtained with the predict endpoint
+    predictions = []
