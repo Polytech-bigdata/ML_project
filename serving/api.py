@@ -1,9 +1,9 @@
 import os
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI
 import numpy as np
 import pandas as pd
 from scripts.utils import load_pipeline, create_pickle_file
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
 from typing import Optional
 
 app = FastAPI(title="ICU Mortality Prediction API", description="API to predict ICU mortality", version="1.0")
@@ -217,7 +217,7 @@ async def predict(data: list[PatientData]):
     return {"predictions": predictions}
 
 @app.post("/feedback")
-async def feedback(data: list[FeedbackData]):
+async def feedback(data: list[FeedbackData], background_tasks: BackgroundTasks):
     # Create a CSV file with the feedback data
 
     # Initialize an empty numpy array with the correct shape
@@ -268,28 +268,36 @@ async def feedback(data: list[FeedbackData]):
     prod_data = pd.read_csv("data/prod_data.csv", header=1, delimiter=";")
 
     # Check if the number of feedbacks is a multiple of 20
-    if len(prod_data) % 20 == 0:
+    if len(prod_data) % 20 == 0 and len(prod_data) > 0:
         # Train a new model
         print("Training a new model...")
+        background_tasks.add_task(train_new_model, prod_data)
+        return {"message": "Feedback received. A new model will be trained."}
+    return {"message": "Feedback received."}
 
-        # Split the data into features and target
-        np_prod_features = prod_data.iloc[:, :-2]
-        np_prod_target = prod_data.iloc[:, -2:-1]
-        np_prod_prediction = prod_data.iloc[:, -1:]
 
-        # Load the reference data
-        ref_data = pd.read_csv("data/ref_data.csv", header=1, delimiter=";")
+def train_new_model(prod_data):
 
-        # Split the reference data into features and target
-        np_ref_data_features = ref_data.iloc[:, :-1]
-        np_ref_data_target = ref_data.iloc[:, -1:]
+    # Split the data into features and target
+    np_prod_features = prod_data.iloc[:, :-2]
+    np_prod_target = prod_data.iloc[:, -2:-1]
+    np_prod_prediction = prod_data.iloc[:, -1:]
 
-        # Concatenate the reference data and the feedback data
-        np_data = np.vstack([np_ref_data_features, np_prod_features])
-        np_target = np.vstack([np_ref_data_target, np_prod_target])
+    # Load the reference data
+    ref_data = pd.read_csv("data/ref_data.csv", header=1, delimiter=";")
 
-        # Train a new model
-        model.fit(np_data, np_target)
+    # Split the reference data into features and target
+    np_ref_data_features = ref_data.iloc[:, :-1]
+    np_ref_data_target = ref_data.iloc[:, -1:]
 
-        # Save the new model
-        create_pickle_file(model, "artifacts/model.pkl")        
+    # Concatenate the reference data and the feedback data
+    np_data = np.vstack([np_ref_data_features, np_prod_features])
+    np_target = np.vstack([np_ref_data_target, np_prod_target])
+
+    # Train a new model
+    model.fit(np_data, np_target)
+    print("New model trained.")
+
+    # Save the new model
+    create_pickle_file(model, "artifacts/model.pkl")        
+    print("New model saved.")
