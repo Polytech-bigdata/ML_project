@@ -28,7 +28,7 @@ if submit_button and uploaded_file is not None:
     pd_data = pd.read_csv(StringIO(bytes_data.decode('utf-8')))
     
     json_data = pd_data.replace({np.nan: None}).to_dict(orient='records')
-    response = requests.post("http://localhost:8080/predict", json=json_data)
+    response = requests.post("http://serving-api:8080/predict", json=json_data)
     res = response.json()
     
     # Ajout des prédictions sous forme d'images
@@ -72,7 +72,7 @@ if st.session_state.pd_data is not None:
                     st.session_state.pd_data.at[index, "target"] = 1
                     data = pd_data.iloc[index].replace({np.nan: None}).to_dict()
                     print(data)
-                    requests.post("http://localhost:8080/feedback", json=[data])
+                    requests.post("http://serving-api:8080/feedback", json=[data])
                     st.rerun()
 
             with col5:
@@ -81,7 +81,7 @@ if st.session_state.pd_data is not None:
                     data = pd_data.iloc[index].replace({np.nan: None}).to_dict()
                     print(data)
                     
-                    requests.post("http://localhost:8080/feedback", json=[data])
+                    requests.post("http://serving-api:8080/feedback", json=[data])
                     st.rerun()
 
         st.write("---")  # Séparateur entre chaque ligne

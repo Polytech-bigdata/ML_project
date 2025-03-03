@@ -1,8 +1,8 @@
 version: "3.8"
 
-# networks:
-#   prod_net:
-#     driver: bridge
+networks:
+  serving_prod_net:
+    external: true
 
 services:
   reporting:
@@ -16,7 +16,6 @@ services:
       - ../artifacts:/app/artifacts
     ports:
       - "8082:8082"
-    # networks:
-    #   - prod_net
-
-#docker compose -f --build --force-recreate reporting/docker-compose.yml up
+      - "8000:8000"
+    networks:
+      - serving_prod_net

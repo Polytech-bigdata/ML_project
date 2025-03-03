@@ -5,8 +5,12 @@ import pandas as pd
 from scripts.utils import load_pipeline, create_pickle_file
 from pydantic import BaseModel
 from typing import Optional
+from prometheus_fastapi_instrumentator import PrometheusFastApiInstrumentator
 
 app = FastAPI(title="ICU Mortality Prediction API", description="API to predict ICU mortality", version="1.0")
+
+instrumentator = PrometheusFastApiInstrumentator()
+instrumentator.instrument(app).expose(app)
 
 model = load_pipeline("artifacts/model.pkl")
 imputer = load_pipeline("artifacts/imputer.pkl")
@@ -223,3 +227,8 @@ def train_new_model(prod_data):
     # Save the new model
     create_pickle_file(model, "artifacts/model.pkl")        
     print("New model saved.")
+
+@app.get("/metrics")
+async def metrics():
+    # Cette route expose les métriques à Prometheus
+    return instrumentator.metrics()

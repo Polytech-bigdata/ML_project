@@ -3,5 +3,8 @@ WORKDIR /app
 COPY . .
 RUN pip3 install --upgrade pip
 RUN pip3 install -r requirements.txt
+RUN apt-get update && apt-get install -y supervisor
 
-CMD python project.py && evidently ui --host 0.0.0.0 --port 8082
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+CMD ["/usr/bin/supervisord"]

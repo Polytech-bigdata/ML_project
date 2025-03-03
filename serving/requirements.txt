@@ -5,3 +5,4 @@ scikit-learn
 matplotlib
 pandas
 pydantic
+prometheus_fastapi_instrumentator

@@ -29,9 +29,14 @@ scrape_configs:
     static_configs:
       - targets: ['cadvisor:8080']  # cAdvisor dans le même réseau Docker (8080 exposé sur le port 8079 de l'hôte)
 
+  - job_name: "grafana"
+    static_configs:
+      - targets: ['grafana:3000']  # Node exporter dans le même réseau Docker
+
   - job_name: "webapp"
     static_configs:
       - targets: ['webapp:8081']  # Le conteneur webapp expose les métriques sur le port 8081
+    metrics_path: /_stcore/metrics
 
   - job_name: "serving-api"
     static_configs:
@@ -39,4 +44,5 @@ scrape_configs:
 
   - job_name: "reporting"
     static_configs:
-      - targets: ['reporting:8082']  # Le conteneur reporting expose les métriques sur le port 8082
+      - targets: ['reporting:8000']  # Le conteneur reporting expose les métriques sur le port 8082
+    metrics_path: /

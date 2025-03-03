@@ -22,6 +22,8 @@ from evidently.ui.remote import RemoteWorkspace
 from evidently.ui.workspace import Workspace
 from evidently.ui.workspace import WorkspaceBase
 from evidently.metric_preset import ClassificationPreset
+from prometheus_client import Gauge, start_http_server
+import time
 
 from scripts.utils import load_heterogeneous_dataset, load_pipeline
 
@@ -189,6 +191,9 @@ def create_demo_project(workspace: str):
     test_suite = create_test_suite()
     ws.add_test_suite(project.id, test_suite)
 
+    # Démarrer le serveur Prometheus sur le port 8000
+    server, t = start_http_server(8000)
+    server.serve_forever()
 
 if __name__ == "__main__":
     create_demo_project(WORKSPACE)
