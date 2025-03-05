@@ -85,21 +85,6 @@ def create_test_suite():
 def create_project(workspace: WorkspaceBase):
     project = workspace.create_project(PROJECT_NAME)
     project.description = PROJECT_DESCRIPTION
-    # project.dashboard.add_panel(
-    #     DashboardPanelCounter(
-    #         title="Balanced Accuracy",
-    #         filter=ReportFilter(metadata_values={}, tag_values=[]),
-    #         value=PanelValue(
-    #             metric_id="CustomValueMetric",
-    #             metric_args={"title": "Balanced Accuracy"},
-    #             field_path=CustomValueMetric.fields.value,
-    #             legend="count",
-    #         ),
-    #         text="count",
-    #         agg=CounterAgg.LAST,
-    #         size=WidgetSize.HALF,
-    #     )
-    # )
     
     project.dashboard.add_panel(
         DashboardPanelCounter(

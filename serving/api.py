@@ -14,13 +14,8 @@ instrumentator.instrument(app).expose(app)
 
 model = load_pipeline("artifacts/model.pkl")
 imputer = load_pipeline("artifacts/imputer.pkl")
-scaler = None
-pca = None
-try:
-    scaler = load_pipeline("artifacts/scaler.pkl")
-    pca = load_pipeline("artifacts/pca.pkl")
-except:
-    pass
+scaler = load_pipeline("artifacts/scaler.pkl")
+pca = load_pipeline("artifacts/pca.pkl")
 
 class PatientData(BaseModel):
     hospital_id: Optional[int] = np.nan
@@ -106,8 +101,8 @@ class PatientData(BaseModel):
     apache_2_bodysystem: Optional[str] = np.nan
 
 class FeedbackData(PatientData):
-    target: Optional[int] = np.nan
-    prediction: Optional[int] = np.nan
+    target:  int 
+    prediction:  int 
 
 @app.post("/predict")
 async def predict(data: list[PatientData]):

@@ -1,11 +1,10 @@
 #import libraries
 import pickle
-from copy import deepcopy
 import numpy as np
 from time import time
 from sklearn import set_config
 from sklearn.compose import ColumnTransformer
-from sklearn.feature_selection import SelectFromModel, SelectKBest
+from sklearn.feature_selection import SelectFromModel
 from sklearn.pipeline import Pipeline 
 np.set_printoptions(threshold=10000,suppress=True) 
 import pandas as pd 
@@ -18,12 +17,12 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, make_scorer, precision_score, recall_score
+from sklearn.metrics import make_scorer, recall_score
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler, LabelEncoder
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, BaggingClassifier
 from sklearn.impute import SimpleImputer
-#from xgboost import XGBClassifier
+from xgboost import XGBClassifier
 import os
 
 #global variables
@@ -103,9 +102,8 @@ def imputer_variables(X, col_num, col_cat, debugging=False):
     X_cat_filled = X_cat_filled.astype(str)
 
     #transform the categorical variables into numerical variables
-    enc = LabelEncoder()
-    for i in range(X_cat_filled.shape[1]):
-        X_cat_filled[:,i] = enc.fit_transform(X_cat_filled[:,i])
+    enc = OrdinalEncoder()
+    X_cat_filled = enc.fit_transform(X_cat_filled)
     X_cat_filled = X_cat_filled.astype(float)
 
     # fill missing values in the numerical variables with the mean of the column
@@ -228,7 +226,8 @@ def run_classifiers(X, y, clfs, score_methode, n_splits=10, debugging=False):
         # of the criterion available in the cross_val_score function (such as 'roc_auc')
         cv_crit = cross_val_score(clf, X, y, cv=kf, scoring=score_methode, n_jobs=-1)
 
-        mean_scores[i] = np.mean(cv_crit) # 
+        #store the mean of the criterion (1 value for 1 partition so for the 10 cross-validation there're 10 scoring values for the same classifier) choose for each classifier
+        mean_scores[i] = np.mean(cv_crit)  
         
         execution_time = time() - start
 
@@ -349,17 +348,17 @@ def comparison_cross_validation(X, y, clfs, scoring=scoring, n_splits=10, debugg
 def init_clfs(N_ESTIMATORS = 200, RANDOM_STATE = 1, N_NEIGHBORS = 5, N_COMPONENTS = 3):
     #global clfs
     clfs = {
-        #'RF': RandomForestClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # Random Forest
-        #'KNN': KNeighborsClassifier(n_neighbors=N_NEIGHBORS),  # K-Nearest Neighbors
-        #'MLP': MLPClassifier(hidden_layer_sizes=[20,10], random_state=RANDOM_STATE),  # Multi-Layer Perceptron
+        'RF': RandomForestClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # Random Forest
+        'KNN': KNeighborsClassifier(n_neighbors=N_NEIGHBORS),  # K-Nearest Neighbors
+        'MLP': MLPClassifier(hidden_layer_sizes=[20,10], random_state=RANDOM_STATE),  # Multi-Layer Perceptron
         'Naive Bayes': GaussianNB(),  # Naive Bayes
-        #'CART': DecisionTreeClassifier(random_state=RANDOM_STATE),  # Arbre CART
-        #'ID3': DecisionTreeClassifier(criterion='entropy', random_state=RANDOM_STATE),  # Arbre ID3
-        #'DS': DecisionTreeClassifier(max_depth=1, random_state=RANDOM_STATE),  # Decision Stump
-        #'Bagging': BaggingClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # Bagging
-        #'AdaBoost': AdaBoostClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # AdaBoost
-        #'SVM': SVC(random_state=RANDOM_STATE),  # Support Vector Machine
-        #'XGBoost': XGBClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE)  # XGBoost
+        'CART': DecisionTreeClassifier(random_state=RANDOM_STATE),  # Arbre CART
+        'ID3': DecisionTreeClassifier(criterion='entropy', random_state=RANDOM_STATE),  # Arbre ID3
+        'DS': DecisionTreeClassifier(max_depth=1, random_state=RANDOM_STATE),  # Decision Stump
+        'Bagging': BaggingClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # Bagging
+        'AdaBoost': AdaBoostClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE),  # AdaBoost
+        'SVM': SVC(random_state=RANDOM_STATE),  # Support Vector Machine
+        'XGBoost': XGBClassifier(n_estimators=N_ESTIMATORS, random_state=RANDOM_STATE)  # XGBoost
     }
     return clfs
 
@@ -385,25 +384,25 @@ def init_clfs_parameters():
             'criterion': ['gini', 'entropy'],
             'splitter': ['best', 'random']
         },
-        # BaggingClassifier: {
-        #     'n_estimators': [10, 100, 1000],
-        #     'max_samples': [0.5, 1.0],
-        #     'max_features': [0.5, 1.0]
-        # },
+        BaggingClassifier: {
+            'n_estimators': [10, 100, 1000],
+            'max_samples': [0.5, 1.0],
+            'max_features': [0.5, 1.0]
+        },
         AdaBoostClassifier: {
             'n_estimators': [50, 100, 500],
             'learning_rate': [0.01, 0.1, 1]
         },
-        # SVC: {
-        #     'C': [1, 10, 100],
-        #     'gamma': [0.1, 0.01, 0.001],
-        #     'kernel': ['linear', 'poly', 'rbf', 'sigmoid']
-        # },
-        # XGBClassifier: {
-        #     'n_estimators': [100, 500, 1000],
-        #     'max_depth': [3, 5, 7],
-        #     'learning_rate': [0.01, 0.1, 1]
-        # }
+        SVC: {
+            'C': [1, 10, 100],
+            'gamma': [0.1, 0.01, 0.001],
+            'kernel': ['linear', 'poly', 'rbf', 'sigmoid']
+        },
+        XGBClassifier: {
+            'n_estimators': [100, 500, 1000],
+            'max_depth': [3, 5, 7],
+            'learning_rate': [0.01, 0.1, 1]
+        }
     }
     return clfs_parameters
 
